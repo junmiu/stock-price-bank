@@ -2,11 +2,19 @@
 
 ## Get Started
 
+1. set the required var in `.env.example` file and rename it
+
+```shell
+cp .env.example .env
+```
+
+2. run the server
+
 ```shell
 npm run dev
 ```
 
-if you need a dummy data:
+3. cache all the symbols from mongoDB
 
 ```shell
 npm run seed
@@ -31,5 +39,5 @@ query {symbol(code: "AAPL") {name, code} }
 3. list 3 references
 
 ```
-query { references(date: "2023-10-01", option: { limit: 3, cursor: "12" }) { info { hasNext, cursor }, total, nodes { rate, date } } }
+query { references(startDate: "2023-10-01", option: { limit: 3, cursor: "12" }) { info { hasNext, cursor }, total, nodes { rate, date } } }
 ```

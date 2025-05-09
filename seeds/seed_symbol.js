@@ -1,13 +1,9 @@
-/**
- * @param { import("knex").Knex } knex
- * @returns { Promise<void> } 
- */
-exports.seed = async function(knex) {
-  // Deletes ALL existing entries
-  await knex('symbols').del();
-  await knex('references').del();
+const { MongoClient, Collection } = require('mongodb');
+const dotenv = require('dotenv');
 
-  const symbols = await knex('symbols').insert([
+dotenv.config();
+
+const defaultSymbols = [
     { currency: 'USD', code: 'AAPL', name: 'Apple Inc.' },
     { currency: 'USD', code: 'MSFT', name: 'Microsoft Corporation' },
     { currency: 'USD', code: 'GOOGL', name: 'Alphabet Inc.' },
@@ -114,9 +110,70 @@ exports.seed = async function(knex) {
     { currency: 'USD', code: 'EXPE', name: 'Expedia Group, Inc.' },
     { currency: 'USD', code: 'BKNG', name: 'Booking Holdings Inc.' },
     { currency: 'USD', code: 'TRIP', name: 'Tripadvisor, Inc.' },
-  ]).returning('id');
 
-  await knex('references').insert(
+];
+
+const connect = async () => {
+  const { MONGODB_URI, MONGODB_USERNAME, MONGODB_PASSWORD } = process.env;
+  const options = {
+    auth: {
+      username: MONGODB_USERNAME,
+      password: MONGODB_PASSWORD,
+    },
+    directConnection: true,
+    connectTimeoutMS: 3000,
+  };
+  return await MongoClient.connect(MONGODB_URI, options);
+}
+
+/**
+ * @param {MongoClient} client 
+ */
+const disconnect = (client) => {
+  return client.close();
+}
+
+/**
+ * @param {Collection} collection 
+ * @returns {Promise<{code: string, name: string, currency: string}[]>} result
+ */
+const listAllCodeRicWithCurrency = async (collection) => {
+  try {
+    const pipeline = [
+      {
+        $group: {
+          _id: { codeRic: "$codeRic", currencyCode: "$currencyCode" },
+        },
+      },
+      { $sort: { "_id.codeRic": 1 } },
+      {
+        $project: {
+          _id: 0,
+          code: "$_id.codeRic",
+          currency: "$_id.currencyCode",
+          name: "$_id.codeRic",
+        },
+      },
+    ];
+
+    const result = await collection.aggregate(pipeline).toArray();
+    return result;
+  } catch (error) {
+    console.error("Error listing codeRic with currency:", error);
+    throw new Error("Failed to list codeRic with currency");
+  }
+};
+
+const insertSymbols = async (knex, symbols) => {
+  const n = 100;
+  for (let i = 0; i< symbols.length; i += n) {
+    const batch = symbols.slice(i, i + n);
+    await knex('symbols').insert(batch).returning('id');
+  }
+};
+
+const insertReferences = async (knex, symbols) => {
+  return await knex('references').insert(
     symbols.reduce((acc, symbol, index) => {
       const rate = Math.random() * index; // Random rate between 0.8 and 1.0
       const sign = Math.random() < 0.5 ? -1 : 1; // Random sign for rate
@@ -138,4 +195,20 @@ exports.seed = async function(knex) {
       return acc;
     }, []),
   );
+};
+
+/**
+ * @param { import("knex").Knex } knex
+ * @returns { Promise<void> } 
+ */
+exports.seed = async function(knex) {
+  const { MONGODB_NAME, MONGODB_COLLECTION } = process.env;
+  // Deletes ALL existing entries
+  await knex('symbols').del();
+  await knex('references').del();
+  const client = await connect();
+  const symbolArr = await listAllCodeRicWithCurrency(client.db(MONGODB_NAME).collection(MONGODB_COLLECTION));
+  const symbols = await insertSymbols(knex, symbolArr);
+  await disconnect(client);
+  // await insertReferences(knex, symbols);
 };

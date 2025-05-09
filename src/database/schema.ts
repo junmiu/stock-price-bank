@@ -7,7 +7,8 @@ export async function createSymbolsTable(db: Knex) {
       table.increments('id').primary();
       table.string('name');
       table.string('currency');
-      table.string('code').unique();
+      table.string('code');
+      table.unique(['code', 'currency']);
     });
   }
 }
